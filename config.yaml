@@ -7,6 +7,8 @@ open-port-filename: ports.csv
 debug-out: debug.txt
 open-port-ignore: [0,80,443]
 vuln-ignore: [None,Low]
+port-service-ref: port service - ports.csv
+port-service-db: portservice.db
 
 data_file_headers:
   - Plugin ID

@@ -2,6 +2,7 @@ import csv
 import sys
 import os
 from pathlib import Path
+import sqlite3
 
 #pip install pyyaml
 import yaml
@@ -34,6 +35,46 @@ class Config(Baseclass):
                     if localconfig['data-path']:
                         self.data_path = localconfig['data-path']
 
+class SqlDb(Baseclass):
+    filename = None
+    config = None
+    db_filehandler = None
+    delete = None
+    _conn = None
+    def __init__(self,**kwargs):
+        super().__init__(**kwargs)
+        self.db_filehandler = FileHandler(config=self.config, 
+            filename=self.filename,
+            delete=self.delete)
+    def _get_connection(self):
+        if not self._conn:
+            no_db_file = False
+            if not os.path.exists( self.db_filehandler.full_path ):
+                no_db_file = True
+            self._conn = sqlite3.connect( self.db_filehandler.full_path )
+            self._conn.row_factory = sqlite3.Row
+            #if no_db_file:
+            self.create_tables()
+        return self._conn
+    conn = property(fget=_get_connection)
+    def create_tables(self):
+        logger.trace(f'Creating table portservice')
+        self.cur_execute('''CREATE TABLE IF NOT EXISTS portservice (
+            port INTEGER PRIMARY KEY,
+            description TEXT DEFAULT '' NOT NULL,
+            risk_score INTEGER DEFAULT 0 NOT NULL,
+            risk_reason TEXT DEFAULT '' NOT NULL )''')
+    def cur_execute(self,sql, params=None):
+        
+        cur = self.conn.cursor()
+        if params:
+            return cur.execute(sql,params)
+        else:
+            return cur.execute(sql)
+    def cur_commit(self):
+        self.conn.commit()
+        
+
 class FileHandler(Baseclass):
     config = None
     filename = None
@@ -51,10 +92,12 @@ class FileHandler(Baseclass):
         else:
             self.full_path = os.path.join(self.data_path, self.filename)
         logger.trace(f"full-path {self.full_path}")
-    def delete_file():
-        if os.path.exists(filename):
-            logger.trace(f'Delete_file {filename}')
-            os.remove(filename)
+        if self.delete:
+            self.delete_file()
+    def delete_file(self):
+        if os.path.exists(self.full_path):
+            logger.trace(f'Delete_file {self.full_path}')
+            os.remove(self.full_path)
 
 class SourceFile(FileHandler):
     config = None
@@ -83,6 +126,48 @@ class SourceFile(FileHandler):
                         break
         return self._is_valid
                 
+class PortService(Baseclass):
+    data_file = None
+    config = None 
+    db_filehandler = None
+    sqldb = None
+    def __init__(self,**kwargs):
+        super().__init__(**kwargs)
+        self.data_file = self.config.config['port-service-ref']
+        self.sqldb = SqlDb(config=self.config,
+            filename=self.config.config['port-service-db'],
+            delete=False)
+    def read_port_datafile(self):
+        with open(self.data_file, 'r', encoding='utf-8') as f:  
+            reader = csv.DictReader(f)
+            n = 0
+            for row in reader:
+                n += 1
+                self.insert_port(row)
+                print(row)
+                #if n > 10: break
+            self.sqldb.cur_commit()
+    def insert_port(self, row):
+        sql = '''INSERT OR IGNORE INTO portservice (
+                port, description, risk_score, 
+                risk_reason
+                )
+            VALUES (
+                ?, ?, ?,
+                ?
+                )'''
+        sql_params = (row['port'], row['description'], row['risk_score'],
+            row['risk_reason'])
+        self.sqldb.cur_execute(sql,sql_params)
+    def get_port(self,port):
+        sql = '''SELECT description, risk_score, risk_reason
+            FROM portservice
+            WHERE port = ?'''
+        sql_params = (port,)
+        data = self.sqldb.cur_execute(sql,sql_params)
+        data = data.fetchone()
+        return data
+
 @click.group()
 @click.option('--debug', is_flag=True)
 @click.option('--trace', is_flag=True)
@@ -108,6 +193,7 @@ def cli(ctx,debug,trace,verbose):
 def listports(ctx, i, o):
     config = Config()
     sourcefile = SourceFile(config=config, filename=i)
+    ps = PortService(config=config)
     if not sourcefile.is_valid():
         print(f"The file {i} is not valid")
     opfile = FileHandler(config=config, filename=o, delete=True)
@@ -137,6 +223,11 @@ def listports(ctx, i, o):
             outrow['IP Address'] = v['IP Address']
             for port in v['ports']:
                 outrow['Port'] = port
+                portdetail = ps.get_port(port)
+                if portdetail:
+                    outrow['Service'] = portdetail['description']
+                else:
+                    outrow['Service'] = ''
                 writer.writerow(outrow)
                 print(f"{k} {port}")
 
@@ -144,7 +235,7 @@ def listports(ctx, i, o):
 @click.option('--i', help='Input filename',default='tenable.csv')
 @click.option('--o', help='Output filename',default='vulns.csv')
 @click.pass_context
-def listports(ctx, i, o):
+def listvulns(ctx, i, o):
     config = Config()
     sourcefile = SourceFile(config=config, filename=i)
     if not sourcefile.is_valid():
@@ -183,7 +274,12 @@ def listports(ctx, i, o):
                 writer.writerow(outrow)
                 print(f"{k} {name}")
     
-
+@cli.command('portservice')
+@click.pass_context
+def portservice(ctx):
+    config = Config()
+    ps = PortService(config=config)
+    ps.read_port_datafile()
     
 
 if __name__ == '__main__':
