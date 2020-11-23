@@ -1,0 +1,56 @@
+data-path: 
+completed-prefix: '#'
+delimiter-in: ","
+delimiter-out: "\t"
+filename-out: output.csv
+open-port-filename: ports.csv
+debug-out: debug.txt
+open-port-ignore: [0,80,443]
+vuln-ignore: [None,Low]
+
+data_file_headers:
+  - Plugin ID
+  - CVE
+  - CVSS
+  - Risk
+  - Host
+  - Protocol
+  - Port
+  - Name
+  - Synopsis
+  - Description
+  - Solution
+  - See Also
+  - Plugin Output
+  - Asset UUID
+  - Vulnerability State
+  - IP Address
+  - FQDN
+  - NetBios
+  - OS
+  - MAC Address
+  - Plugin Family
+  - CVSS Base Score
+  - CVSS Temporal Score
+  - CVSS Temporal Vector
+  - CVSS Vector
+  - CVSS3 Base Score
+  - CVSS3 Temporal Score
+  - CVSS3 Temporal Vector
+  - CVSS3 Vector
+  - System Type
+  - Host Start
+  - Host End
+
+output_port_file_headers:
+ - Host
+ - IP Address
+ - Port
+ - calculated_Service
+ - calculated_Residual_Risk
+
+output_vuln_file_headers:
+- Host
+- Risk
+- Name
+- IP Address

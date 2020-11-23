@@ -1,0 +1,4 @@
+# save this as config_local.yaml to have a separate config for each environment
+# git ignore config_local.yaml
+data-path: C:\myfile
+data-path: \myfile
